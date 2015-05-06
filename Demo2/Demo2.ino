@@ -230,44 +230,41 @@ void loadEncoder(int counter) {
 void pos(double *in, int countL, int countR, double x){
   double d, L1, L2, L3, L4;
   double angleL, angleR;
-  double angle1, angle2;
+  double angle3, angle4, angleP;
   double x1, x2, x3;
   double y1, y2, y3;
   double p3x, p3y;
   double p[2];
   
   // Need to change the location of these values
-  d = 2.*x;
-  L1 = 105.000;
-  L2 = 138.000;
+  d = x;             // Distance along x-axis from origin to a single base joint 
+  L1 = 105.000;      // Crank-arm length
+  L2 = 138.000;      // Coupler-link length
   
-  p[0] = *in;
+  p[0] = *in;        // Local position matrix
   
-  angleL = d_map(countL, 0, 8192, -2*PI, 2*PI);
+  angleL = d_map(countL, 0, 8192, -2*PI, 2*PI);  // Map the pulse count to an angle in rad
   angleR = d_map(countR, 0, 8192, -2*PI, 2*PI);
   
-  x1 = L1*cos(angleL);
-  x2 = L1*cos(angleR);
-  x3 = (x1 + x2 + d)/2;
-  p3x = (x2-x1)/2;
+  x1 = L1*cos(angleL) + d;    // For any position of EE along y-axis, both x1 and x2 will be positive
+  x2 = L1*cos(angleR) + d;    // The vector of the left revolute joint is [-x1,y1]
+  x3 = x1 + x2;               // x3 is the [always positive] x-component of the line connecting passive joints
   
-  y1 = L1*sin(angleL);
+  y1 = L1*sin(angleL);        
   y2 = L1*sin(angleR);
-  y3 = (fabs(y1-y2)/2);
-  p3y = (y1+y2)/2;
+  y3 = fabs(y1-y2);           // y3 is always positive for simplicity as is x3
   
-  if (p3x != 0) {
-    angle1 = atan(p3y/p3x);
-  } else {
-    angle1 = PI/2.;
-  }
+  L3 = sqrt(pow(x3,2) + pow(y3,2));          // L3 is the length of vector [x3,y3] - again, always positive 
+  L4 = sqrt(pow(L2,2) - pow((L3/2),2));      // L4 connects the middle of L3 to the EE
   
-  L3 = sqrt(pow(x3,2) + pow(y3,2));
-  angle2 = acos(L3/L2);
-  L4 = L2*sin(angle2);
+  angle3 = atan(y3/x3);                      // Angle of L3 -always positive
+  angle4 = 90 + copysign(angle3,(y2-y1));    // Angle of L4 in quadrant I or II
+  
+  p3x = x2 - 0.5*L3*cos(angle3);                      // [p3x,p3y] connects the origin to L3 and L4
+  p3y = y2 - copysign(0.5*L3*cos(angle3),(y2-y1));    // If (y2 > y1) EE will be in quadrant II
 
-  p[0] = p3x + copysign(L4,(countL-countR))*cos(angle1);
-  p[1] = p3y + fabs(L4*sin(angle1));
+  p[0] = p3x + L4*cos(angle4);    // p[0] == EEx
+  p[1] = p3y + L4*sin(angle4);    // p[1] == EEy
   
   *in = p[0];
   in += 1;
@@ -424,7 +421,8 @@ void loop() {
           digitalWrite(stp,HIGH);
           delayMicroseconds(1000);
           dStep -= i;    
-       }      
+       }
+       if (dStep < 0) { dStep = 0; }      
        dStep = dStep/132;
    } else {
          digitalWrite(slp,LOW);

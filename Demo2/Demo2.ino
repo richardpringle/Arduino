@@ -402,28 +402,24 @@ void loop() {
   if (EE[0] > 60) {
     digitalWrite(slp,HIGH);
     digitalWrite(dir,HIGH);
-    dStep = dStep*132;
     for (int i=0;i<265;i++) {
       digitalWrite(stp,LOW);
       delayMicroseconds(1000);
       digitalWrite(stp,HIGH);
       delayMicroseconds(1000);
-      dStep += i;
-    }
-    dStep = dStep/132;    
+      dStep++;
+    }    
   } else if (EE[0] < -60) {
        digitalWrite(slp,HIGH);
        digitalWrite(dir,LOW);
-       dStep = dStep*132;
        for (int i=0;i<265;i++) {
           digitalWrite(stp,LOW);
           delayMicroseconds(1000);
           digitalWrite(stp,HIGH);
           delayMicroseconds(1000);
-          dStep -= i;    
+          dStep--;    
        }
        if (dStep < 0) { dStep = 0; }      
-       dStep = dStep/132;
    } else {
          digitalWrite(slp,LOW);
    }
@@ -440,8 +436,15 @@ void loop() {
       spd = 3200;
     }
   
-    compact1(motor_reverse,speedByte1(spd),speedByte2(spd));
-    compact2(motor_reverse,speedByte1(spd),speedByte2(spd)); 
+//    compact1(motor_reverse,speedByte1(spd),speedByte2(spd));
+//    compact2(motor_reverse,speedByte1(spd),speedByte2(spd)); 
 
+
+
+    Serial.print(EE[0]);
+    Serial.print(", ");
+    Serial.print(EE[1]);
+    Serial.print(", ");
     Serial.println(dStep);
+    
 }

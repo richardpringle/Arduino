@@ -258,10 +258,10 @@ void pos(double *in, int countL, int countR, double x){
   L4 = sqrt(pow(L2,2) - pow((L3/2),2));      // L4 connects the middle of L3 to the EE
   
   angle3 = atan(y3/x3);                      // Angle of L3 -always positive
-  angle4 = 90 + copysign(angle3,(y2-y1));    // Angle of L4 in quadrant I or II
+  angle4 = (PI/2.) + copysign(angle3,(y2-y1));    // Angle of L4 in quadrant I or II
   
   p3x = x2 - 0.5*L3*cos(angle3);                      // [p3x,p3y] connects the origin to L3 and L4
-  p3y = y2 - copysign(0.5*L3*cos(angle3),(y2-y1));    // If (y2 > y1) EE will be in quadrant II
+  p3y = y2 - copysign(0.5*L3*sin(angle3),(y2-y1));    // If (y2 > y1) EE will be in quadrant II
 
   p[0] = p3x + L4*cos(angle4);    // p[0] == EEx
   p[1] = p3y + L4*sin(angle4);    // p[1] == EEy
@@ -419,13 +419,14 @@ void loop() {
           delayMicroseconds(1000);
           dStep--;    
        }
-       if (dStep < 0) { dStep = 0; }      
+       if (dStep < 0) { dStep = 0; }
+       if (dStep > 1100) { dStep = 1100; }      
    } else {
          digitalWrite(slp,LOW);
    }
    
-    if (EE[1] < 165) {
-      x = 165 - EE[1];
+    if (EE[1] < 170) {
+      x = 170 - EE[1];
     } else {
       x = 0;
     }
@@ -436,15 +437,15 @@ void loop() {
       spd = 3200;
     }
   
-//    compact1(motor_reverse,speedByte1(spd),speedByte2(spd));
-//    compact2(motor_reverse,speedByte1(spd),speedByte2(spd)); 
+    compact1(motor_reverse,speedByte1(spd),speedByte2(spd));
+    compact2(motor_reverse,speedByte1(spd),speedByte2(spd)); 
 
 
 
-    Serial.print(EE[0]);
-    Serial.print(", ");
-    Serial.print(EE[1]);
-    Serial.print(", ");
-    Serial.println(dStep);
+//    Serial.print(EE[0]);
+//    Serial.print(", ");
+//    Serial.print(EE[1]);
+//    Serial.print(", ");
+//    Serial.println(dStep);
     
 }

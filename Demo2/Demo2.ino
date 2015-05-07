@@ -1,6 +1,11 @@
 #include <SPI.h>
 #include <math.h>
 
+// Link Lengths
+double L1 = 105.000;      // Crank-arm length
+double L2 = 138.000;      // Coupler-link length
+
+// START Lookup Table
 // Initialize lookup table for base joint distance
 double dTable[1100];
 int dStep;
@@ -38,6 +43,8 @@ void base(double *in){
   }
   
 }
+// END Lookup Table
+
 
 // START Stepper
 int dir = 3;
@@ -94,9 +101,10 @@ void thirtysecondthStep() {
 }
 // END Stepper
 
+
 // START Counter
-long count_L;
-long count_R;
+long count_L, count_R;
+double theta_L, theta_R;
 
 double EE[2]; // EE[0] = x, EE[1] = y
 
@@ -151,7 +159,6 @@ byte B1_mode = 0x03;
 byte enable_count = 0x00;
 byte disable_count = 0x04;
 
-
 // pins on arduino
 int counter_top = 10;  // green to counter_top
 int counter_bottom = 4;  // green to bottom
@@ -161,7 +168,6 @@ double d_map(long x, long in_min, long in_max, double out_min, double out_max)
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
-
 
 // Encoder init() for individual encoder (input: counter_top or counter_bottom)
 void initEncoder(int counter) {
@@ -225,26 +231,20 @@ void loadEncoder(int counter) {
 //  SPI.transfer(counter_top,0x10,SPI_CONTINUE);
 //  SPI.transfer(counter_top,0x00,SPI_LAST);
 }
+// END Counter
 
+
+// START Forward Kinematics
 // Position function using the angles and the forward kinematics
-void pos(double *in, int countL, int countR, double x){
-  double d, L1, L2, L3, L4;
-  double angleL, angleR;
-  double angle3, angle4, angleP;
+void pos(double *in, double angleL, double angleR, double d){
+  double L3, L4;
+  double angle3, angle4;
   double x1, x2, x3;
   double y1, y2, y3;
   double p3x, p3y;
   double p[2];
   
-  // Need to change the location of these values
-  d = x;             // Distance along x-axis from origin to a single base joint 
-  L1 = 105.000;      // Crank-arm length
-  L2 = 138.000;      // Coupler-link length
-  
   p[0] = *in;        // Local position matrix
-  
-  angleL = d_map(countL, 0, 8192, -2*PI, 2*PI);  // Map the pulse count to an angle in rad
-  angleR = d_map(countR, 0, 8192, -2*PI, 2*PI);
   
   x1 = L1*cos(angleL) + d;    // For any position of EE along y-axis, both x1 and x2 will be positive
   x2 = L1*cos(angleR) + d;    // The vector of the left revolute joint is [-x1,y1]
@@ -270,7 +270,8 @@ void pos(double *in, int countL, int countR, double x){
   in += 1;
   *in = p[1];  
 }
-// END Counter
+// END Forward Kinematics
+
 
 // START Driver
 // Compact Protocol
@@ -327,6 +328,60 @@ byte speedByte2(int x) {
 }
 // END Driver
 
+
+// START Force
+void force(double Fx, double Fy, double angleL, double angleR, double d) {
+  double x,y;
+  double TL,TR;
+  byte direcL, direcR;
+  
+  x = EE[0];
+  y = EE[1];
+  
+  // From paper
+  double a11 = L1*(y*cos(angleL) - (x + d)*sin(angleL)); 
+  double a22 = L1*(y*cos(angleR)+(d - x)*sin(angleR));
+  double b11 = x + d - L1*cos(angleL);
+  double b12 = y - L1*sin(angleL);
+  double b21 = x - d - L1*cos(angleR);
+  double b22 = y - L1*sin(angleR);
+  
+  double j11 = b11/a11;
+  double j12 = b12/a11;
+  double j21 = b21/a22;
+  double j22 = b22/a22;
+  
+  // T = J*F -> Here, J is the inverse Jacobian
+  TL = floor(j11*Fx + j12*Fy);
+  TR = floor(j21*Fx + j22*Fy);
+  
+  if (TL < 0) {
+    direcL = motor_forward;
+  } else {
+    direcL = motor_reverse;
+  }
+  
+  if (TR < 0) {
+    direcR = motor_forward;
+  } else {
+    direcR = motor_reverse;
+  }
+  
+  TL = fabs(TL);
+  TR = fabs(TR);
+  
+  if (TL > 3200) {TL = 3200;}
+  if (TR > 3200) {TR = 3200;}  
+  
+  compact1(direcL,speedByte1(TL),speedByte2(TL));     // Driver1 is the bottom (angleL)
+  compact2(direcR,speedByte1(TR),speedByte2(TR));     // Driver2 is the top (angleR)
+ 
+  
+}
+// END Force
+
+
+// Start Setup
 void setup() {
   // put your setup code here, to run once:
 
@@ -357,6 +412,7 @@ void setup() {
   delay(10);
   // END Stepper
   
+  
   // START Counter
     // initEncoder includes loading DTR
   // DTR is loaded to CNTR at INDEX pulsse
@@ -372,6 +428,13 @@ void setup() {
   delay(1000);
   // END Counter
   
+  
+  // START base lookup table
+  base(dTable);
+  dStep = 0;
+  // END base 
+  
+  
   // START Driver
   Serial1.begin(115200);  
   compact1(exit_safe_start);
@@ -379,27 +442,28 @@ void setup() {
   Serial2.begin(115200);  
   compact2(exit_safe_start);
   delay(1000);
-  // END Driver
-  
-  // START base lookup table
-  base(dTable);
-  dStep = 0;
-  // END base 
-  
+  // END Driver  
+
 
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  long k = 100;
+  double thetaL, thetaR;
+  
+  long k = 9000;
   long x;
   int spd;
   
   count_R = readEncoder(counter_top);
   count_L = readEncoder(counter_bottom);
-  pos(EE,count_L,count_R,dTable[dStep]);
   
-  if (EE[0] > 60) {
+  theta_L = d_map(count_L, 0, 8192, -2*PI, 2*PI);  // Map the pulse count to an angle in rad
+  theta_R = d_map(count_R, 0, 8192, -2*PI, 2*PI);
+  
+  pos(EE,theta_L,theta_R,dTable[dStep]);
+  
+  if (EE[0] > 600) {
     digitalWrite(slp,HIGH);
     digitalWrite(dir,HIGH);
     for (int i=0;i<265;i++) {
@@ -409,7 +473,7 @@ void loop() {
       delayMicroseconds(1000);
       dStep++;
     }    
-  } else if (EE[0] < -60) {
+  } else if (EE[0] < -600) {
        digitalWrite(slp,HIGH);
        digitalWrite(dir,LOW);
        for (int i=0;i<265;i++) {
@@ -431,14 +495,16 @@ void loop() {
       x = 0;
     }
     
-    if ((k*x) < 3200) {
-      spd = k*x;
-    } else {
-      spd = 3200;
-    }
+    force(0,(k*x),theta_L,theta_R,dTable[dStep]);
+    
+//    if ((k*x) < 3200) {
+//      spd = k*x;
+//    } else {
+//      spd = 3200;
+//    }
   
-    compact1(motor_reverse,speedByte1(spd),speedByte2(spd));
-    compact2(motor_reverse,speedByte1(spd),speedByte2(spd)); 
+//    compact1(motor_reverse,speedByte1(spd),speedByte2(spd));
+//    compact2(motor_reverse,speedByte1(spd),speedByte2(spd)); 
 
 
 

@@ -338,6 +338,8 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
   x = EE[0];
   y = EE[1];
   
+  angleL = PI - angleL;
+  
   // From paper
   double a11 = L1*(y*cos(angleL) - (x + d)*sin(angleL)); 
   double a22 = L1*(y*cos(angleR)+(d - x)*sin(angleR));
@@ -352,7 +354,7 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
   double j22 = b22/a22;
   
   // T = J*F -> Here, J is the inverse Jacobian
-  TL = floor(j11*Fx + j12*Fy);
+  TL = -floor(j11*Fx + j12*Fy);
   TR = floor(j21*Fx + j22*Fy);
   
   if (TL < 0) {
@@ -375,6 +377,10 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
   
   compact1(direcL,speedByte1(TL),speedByte2(TL));     // Driver1 is the bottom (angleL)
   compact2(direcR,speedByte1(TR),speedByte2(TR));     // Driver2 is the top (angleR)
+
+//  Serial.print(TR);
+//  Serial.print(", ");
+//  Serial.println(TL);
  
   
 }
@@ -451,7 +457,7 @@ void loop() {
   // put your main code here, to run repeatedly:
   double thetaL, thetaR;
   
-  long k = 9000;
+  long k = 15000;
   long x;
   int spd;
   
@@ -463,7 +469,7 @@ void loop() {
   
   pos(EE,theta_L,theta_R,dTable[dStep]);
   
-  if (EE[0] > 600) {
+  if (EE[0] > 60) {
     digitalWrite(slp,HIGH);
     digitalWrite(dir,HIGH);
     for (int i=0;i<265;i++) {
@@ -473,7 +479,7 @@ void loop() {
       delayMicroseconds(1000);
       dStep++;
     }    
-  } else if (EE[0] < -600) {
+  } else if (EE[0] < -60) {
        digitalWrite(slp,HIGH);
        digitalWrite(dir,LOW);
        for (int i=0;i<265;i++) {

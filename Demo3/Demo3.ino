@@ -1,15 +1,71 @@
 #include <SPI.h>
 #include <math.h>
 
+// Link Lengths
+double L1 = 105.000;      // Crank-arm length
+double L2 = 138.000;      // Coupler-link length
+
+// Variables for loop()
+double thetaL, thetaR;
+  
+long k = 15000;
+long b = 500;
+long penetration;
+int spd;
+double dt,t,t0;
+int vx, vy;
+
+double EEx0, EEy0, EEx1, EEy1;
+
+// START Lookup Table
+// Initialize lookup table for base joint distance
+double dTable[1100];
+int dStep;
+
+void base(double *in){
+  	
+  double a = 7.92509;
+  double b = 0.88114906;
+  double xt = 0;
+  double t = 3*PI / 2.;
+  double alpha, yt;
+  double table[1100];
+  int step = 1;
+  
+  table[0] = *in;
+  
+  table[0] = 0;
+  
+  *in = table[0];
+  in += 1;
+
+  while (xt < 44.5) {
+    alpha = (step/1600.)*2.*PI;
+    yt = -(a*(t-b+alpha)*sin(t));
+    while ( yt > 30.3625 ) {
+      t = -(30.3625/(a*sin(t))) - (alpha - b);
+      yt = -(a*(t-b+alpha)*sin(t));
+    }
+    xt = rint( -(a*(t-b+alpha)*cos(t))*10. )/10.;
+    table[step] = xt;
+    *in = table[step];
+    in += 1;    
+    step++;
+  }
+  
+}
+// END Lookup Table
+
+
 // START Stepper
-int dir = 3;
-int stp = 12;
-int slp = 5;
-int rst = 6;
-int ms2 = 7;
-int ms1 = 8;
-int ms0 = 9;
-int en = 11;
+#define dir 3
+#define stp 12
+#define slp 5
+#define rst 6
+#define ms2 7
+#define ms1 8
+#define ms0 9
+#define en 11
 
 int direc = HIGH;
 
@@ -56,11 +112,12 @@ void thirtysecondthStep() {
 }
 // END Stepper
 
-// START Counter
-long count_L;
-long count_R;
 
-double EE[2];
+// START Counter
+long count_L, count_R;
+double theta_L, theta_R;
+
+double EE[2]; // EE[0] = x, EE[1] = y
 
 // I'm pretty sure all these byte variables should be #define
 // and same goes for the counter_top and counter_bottom
@@ -113,7 +170,6 @@ byte B1_mode = 0x03;
 byte enable_count = 0x00;
 byte disable_count = 0x04;
 
-
 // pins on arduino
 int counter_top = 10;  // green to counter_top
 int counter_bottom = 4;  // green to bottom
@@ -124,8 +180,7 @@ double d_map(long x, long in_min, long in_max, double out_min, double out_max)
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-
-// Temporary Encoder init() for one encoder with ss on pin 10
+// Encoder init() for individual encoder (input: counter_top or counter_bottom)
 void initEncoder(int counter) {
   
   // Configure Arduino SPI to work with LS7366
@@ -136,7 +191,7 @@ void initEncoder(int counter) {
   SPI.transfer(counter,WR+MDR1,SPI_CONTINUE);
   SPI.transfer(counter,B2_mode,SPI_LAST);
   // Set DTR register to 4095 (middle of 4x count of 1024 encoder for one full up and one full down)
-  // Use Modulo-4096 -> ((deg/360)*1024*4)+4096 then convert to hex
+  // Use Modulo-N with range of +/- 4095 counts
   SPI.transfer(counter,WR+DTR,SPI_CONTINUE);
 //  temporarily set to 0x1200 for 45deg initialization
   SPI.transfer(counter,0x12,SPI_CONTINUE);
@@ -187,55 +242,47 @@ void loadEncoder(int counter) {
 //  SPI.transfer(counter_top,0x10,SPI_CONTINUE);
 //  SPI.transfer(counter_top,0x00,SPI_LAST);
 }
+// END Counter
 
+
+// START Forward Kinematics
 // Position function using the angles and the forward kinematics
-void pos(double *in, int countL, int countR){
-  double d, L1, L2, L3, L4;
-  double angleL, angleR;
-  double angle1, angle2;
+void pos(double *in, double angleL, double angleR, double d){
+  double L3, L4;
+  double angle3, angle4;
   double x1, x2, x3;
   double y1, y2, y3;
   double p3x, p3y;
   double p[2];
   
-  // Need to change the location of these values
-  d = 25.000;
-  L1 = 105.000;
-  L2 = 138.000;
+  p[0] = *in;        // Local position matrix
   
-  p[0] = *in;
+  x1 = L1*cos(angleL) + d;    // For any position of EE along y-axis, both x1 and x2 will be positive
+  x2 = L1*cos(angleR) + d;    // The vector of the left revolute joint is [-x1,y1]
+  x3 = x1 + x2;               // x3 is the [always positive] x-component of the line connecting passive joints
   
-  angleL = d_map(countL, 0, 8192, -2*PI, 2*PI);
-  angleR = d_map(countR, 0, 8192, -2*PI, 2*PI);
-  
-  x1 = L1*cos(angleL);
-  x2 = L1*cos(angleR);
-  x3 = (x1 + x2 + d)/2;
-  p3x = (x2-x1)/2;
-  
-  y1 = L1*sin(angleL);
+  y1 = L1*sin(angleL);        
   y2 = L1*sin(angleR);
-  y3 = (fabs(y1-y2)/2);
-  p3y = (y1+y2)/2;
+  y3 = fabs(y1-y2);           // y3 is always positive for simplicity as is x3
   
-  if (p3x != 0) {
-    angle1 = atan(p3y/p3x);
-  } else {
-    angle1 = PI/2.;
-  }
+  L3 = sqrt(pow(x3,2) + pow(y3,2));          // L3 is the length of vector [x3,y3] - again, always positive 
+  L4 = sqrt(pow(L2,2) - pow((L3/2),2));      // L4 connects the middle of L3 to the EE
   
-  L3 = sqrt(pow(x3,2) + pow(y3,2));
-  angle2 = acos(L3/L2);
-  L4 = L2*sin(angle2);
+  angle3 = atan(y3/x3);                      // Angle of L3 -always positive
+  angle4 = (PI/2.) + copysign(angle3,(y2-y1));    // Angle of L4 in quadrant I or II
+  
+  p3x = x2 - 0.5*L3*cos(angle3);                      // [p3x,p3y] connects the origin to L3 and L4
+  p3y = y2 - copysign(0.5*L3*sin(angle3),(y2-y1));    // If (y2 > y1) EE will be in quadrant II
 
-  p[0] = p3x + copysign(L4,(countL-countR))*cos(angle1);
-  p[1] = p3y + fabs(L4*sin(angle1));
+  p[0] = p3x + L4*cos(angle4);    // p[0] == EEx
+  p[1] = p3y + L4*sin(angle4);    // p[1] == EEy
   
   *in = p[0];
   in += 1;
   *in = p[1];  
 }
-// END Counter
+// END Forward Kinematics
+
 
 // START Driver
 // Compact Protocol
@@ -292,6 +339,65 @@ byte speedByte2(int x) {
 }
 // END Driver
 
+
+// START Force
+void force(double Fx, double Fy, double angleL, double angleR, double d) {
+  double x,y;
+  double TL,TR;
+  byte direcL, direcR;
+  
+  x = EE[0];
+  y = EE[1];
+  
+  angleL = PI - angleL;
+  
+  // From paper
+  double a11 = L1*(y*cos(angleL) - (x + d)*sin(angleL)); 
+  double a22 = L1*(y*cos(angleR)+(d - x)*sin(angleR));
+  double b11 = x + d - L1*cos(angleL);
+  double b12 = y - L1*sin(angleL);
+  double b21 = x - d - L1*cos(angleR);
+  double b22 = y - L1*sin(angleR);
+  
+  double j11 = b11/a11;
+  double j12 = b12/a11;
+  double j21 = b21/a22;
+  double j22 = b22/a22;
+  
+  // T = J*F -> Here, J is the inverse Jacobian
+  TL = -floor(j11*Fx + j12*Fy);
+  TR = floor(j21*Fx + j22*Fy);
+  
+  if (TL < 0) {
+    direcL = motor_forward;
+  } else {
+    direcL = motor_reverse;
+  }
+  
+  if (TR < 0) {
+    direcR = motor_forward;
+  } else {
+    direcR = motor_reverse;
+  }
+  
+//  Serial.print(TR);
+//  Serial.print(", ");
+//  Serial.println(TL);
+  
+  TL = fabs(TL);
+  TR = fabs(TR);
+  
+  if (TL > 3200) {TL = 3200;}
+  if (TR > 3200) {TR = 3200;}  
+  
+  compact1(direcL,speedByte1(TL),speedByte2(TL));     // Driver1 is the bottom (angleL)
+  compact2(direcR,speedByte1(TR),speedByte2(TR));     // Driver2 is the top (angleR) 
+  
+}
+// END Force
+
+
+// Start Setup
 void setup() {
   // put your setup code here, to run once:
 
@@ -322,6 +428,7 @@ void setup() {
   delay(10);
   // END Stepper
   
+  
   // START Counter
     // initEncoder includes loading DTR
   // DTR is loaded to CNTR at INDEX pulsse
@@ -337,6 +444,13 @@ void setup() {
   delay(1000);
   // END Counter
   
+  
+  // START base lookup table
+  base(dTable);
+  dStep = 0;
+  // END base 
+  
+  
   // START Driver
   Serial1.begin(115200);  
   compact1(exit_safe_start);
@@ -344,57 +458,105 @@ void setup() {
   Serial2.begin(115200);  
   compact2(exit_safe_start);
   delay(1000);
-  // END Driver
+  // END Driver  
+
+
+  // Get inital position
+  // Could combine if I want to increase speed
+  count_R = readEncoder(counter_top);
+  count_L = readEncoder(counter_bottom);
+  
+  theta_L = d_map(count_L, 0, 8192, -2*PI, 2*PI);  // Map the pulse count to an angle in rad
+  theta_R = d_map(count_R, 0, 8192, -2*PI, 2*PI);
+  
+  pos(EE,theta_L,theta_R,dTable[dStep]);
+  
+  t0 = 0;
 
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  long k = 100;
-  long x;
-  int spd;
+  EEx0 = EE[0];
+  EEy0 = EE[1];  
+  // Could combine if I want to increase speed
   count_R = readEncoder(counter_top);
   count_L = readEncoder(counter_bottom);
-  pos(EE,count_L,count_R);
   
-  if (EE[0] > 60) {
+  theta_L = d_map(count_L, 0, 8192, -2*PI, 2*PI);  // Map the pulse count to an angle in rad
+  theta_R = d_map(count_R, 0, 8192, -2*PI, 2*PI);
+  
+  pos(EE,theta_L,theta_R,dTable[dStep]);
+  t = millis();
+  dt = t - t0;
+  t0 = t;
+  
+  // Speed
+  EEx1 = EE[0]; 
+  EEy1 = EE[1];
+//  vx = fabs(EEx1 - EEx0)/dt;
+//  vy = fabs(EEy1 - EEy0)/dt;
+  
+  
+  // Want to do this with a serialEvent() -> Look up the tutorial on Arduino site.  
+  if (EE[0] > 6000) {
     digitalWrite(slp,HIGH);
     digitalWrite(dir,HIGH);
     for (int i=0;i<265;i++) {
       digitalWrite(stp,LOW);
       delayMicroseconds(1000);
       digitalWrite(stp,HIGH);
-      delayMicroseconds(1000);    
+      delayMicroseconds(1000);
+      dStep++;
     }    
-  } else if (EE[0] < -60) {
+  } else if (EE[0] < -6000) {
        digitalWrite(slp,HIGH);
        digitalWrite(dir,LOW);
        for (int i=0;i<265;i++) {
           digitalWrite(stp,LOW);
           delayMicroseconds(1000);
           digitalWrite(stp,HIGH);
-          delayMicroseconds(1000);    
-       }      
+          delayMicroseconds(1000);
+          dStep--;    
+       }
+       if (dStep < 0) { dStep = 0; }
+       if (dStep > 1100) { dStep = 1100; }      
    } else {
          digitalWrite(slp,LOW);
    }
    
-    if (EE[1] < 165) {
-      x = 165 - EE[1];
-    } else {
-      x = 0;
-    }
+//    if (EE[1] < 170) {
+//      penetration = 170 - EE[1];
+//    } else {
+//      penetration = 0;
+//    }
     
-    if ((k*x) < 3200) {
-      spd = k*x;
-    } else {
-      spd = 3200;
-    }
-  
-    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Serial1 was not working. Try 1 DoF Haptic demo using both motors 
-  
-  
-    compact1(motor_reverse,speedByte1(spd),speedByte2(spd));
-    compact2(motor_reverse,speedByte1(spd),speedByte2(spd)); 
+//    if (EE[0] < -60) {
+//      penetration = -60 - EE[0];
+//    } else {
+//      penetration = 0;
+//    }
 
+
+    // Also want to do this with serialEvent!!!!!    
+//    force((k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in positive x
+//    force((k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in negative x
+//    force(0,(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in positive y
+//    force(0,(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in negative y
+
+//    force((c*vx),0,theta_L,theta_R,dTable[dStep]); // Force in positive x
+//    force(0,(c*vy),theta_L,theta_R,dTable[dStep]); // Force in positive y
+
+//    Serial.print(EE[0]);
+//    Serial.print(", ");
+//    Serial.print(EE[1]);
+//    Serial.print(", ");
+//    Serial.println(dStep);
+
+//    Serial.print(vx);
+//    Serial.print(", ");
+//    Serial.print(vy);
+//    Serial.print(", ");
+    Serial.println(dt);
+    
 }

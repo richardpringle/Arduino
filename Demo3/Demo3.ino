@@ -9,12 +9,12 @@ double L2 = 138.000;      // Coupler-link length
 double thetaL, thetaR;
   
 long k = 15000;
-long b = 500;
+long b = 10;
 long penetration;
 int spd;
 double dt;
 unsigned long t,t0;
-double vx, vy;
+double vx[4],vy[4];
 
 double EEx0, EEy0, EEx1, EEy1;
 
@@ -118,7 +118,7 @@ void thirtysecondthStep() {
 long count_L, count_R;
 double theta_L, theta_R;
 
-double EE[2]; // EE[0] = x, EE[1] = y
+double EE[2];// EE[0] = x, EE[1] = y
 
 // I'm pretty sure all these byte variables should be #define
 // and same goes for the counter_top and counter_bottom
@@ -194,8 +194,9 @@ void initEncoder(int counter) {
   // Set DTR register to 4095 (middle of 4x count of 1024 encoder for one full up and one full down)
   // Use Modulo-N with range of +/- 4095 counts
   SPI.transfer(counter,WR+DTR,SPI_CONTINUE);
-//  temporarily set to 0x1200 for 45deg initialization
-  SPI.transfer(counter,0x12,SPI_CONTINUE);
+  // Set to 0x1200 for 45deg initialization
+  // Set to 0x1000 for 0 ded initialization
+  SPI.transfer(counter,0x10,SPI_CONTINUE);
   SPI.transfer(counter,0x00,SPI_LAST);
   // Set counting mode to positive index, reset to DTR (see above)on INDEX, and 4x count
   SPI.transfer(counter,WR+MDR0,SPI_CONTINUE);
@@ -255,7 +256,7 @@ void pos(double *in, double angleL, double angleR, double d){
   double y1, y2, y3;
   double p3x, p3y;
   double p[2];
-  int temp;
+  int temp0, temp1;
   
   p[0] = *in;        // Local position matrix
   
@@ -276,8 +277,28 @@ void pos(double *in, double angleL, double angleR, double d){
   p3x = x2 - 0.5*L3*cos(angle3);                      // [p3x,p3y] connects the origin to L3 and L4
   p3y = y2 - copysign(0.5*L3*sin(angle3),(y2-y1));    // If (y2 > y1) EE will be in quadrant II
 
+  // Not Filtering or rounding
   p[0] = p3x + L4*cos(angle4);    // p[0] == EEx
   p[1] = p3y + L4*sin(angle4);    // p[1] == EEy
+
+//  // START Filtering and rounding
+//  p[0] = round((p3x + L4*cos(angle4))*100);    // p[0] == EEx
+//  p[1] = round((p3y + L4*sin(angle4))*100);    // p[1] == EEy
+//  
+//  temp0 = p[0]/10;
+//  temp1 = p[1]/10;
+//  temp0 /= 2;
+//  temp1 /= 2;
+//  p[0] = temp0/5.0;
+//  p[1] = temp1/5.0;
+//  
+//  temp0 = (p[0] + EE[0])*5;
+//  temp1 = (p[1] + EE[1])*5;
+//  temp0 /= 5;
+//  temp1 /= 5;
+//  p[0] = temp0/2.0;
+//  p[1] = temp1/2.0;
+//  // END Filtering
   
   *in = p[0];
   in += 1;
@@ -428,6 +449,8 @@ void setup() {
   delay(10);
   digitalWrite(rst,HIGH);
   delay(10);
+  digitalWrite(slp,LOW);
+  delay(10);
   // END Stepper
   
   
@@ -460,22 +483,36 @@ void setup() {
   Serial2.begin(115200);  
   compact2(exit_safe_start);
   delay(1000);
-  // END Driver  
+  // END Driver
 
+    
+
+
+  // For initilization at 0 deg
+  EE[0] = 0;
+  EE[1] = 89.0; 
 
   // Get inital position
   // Could combine if I want to increase speed
-  count_R = readEncoder(counter_top);
-  count_L = readEncoder(counter_bottom);
-  
-  theta_L = d_map(count_L, 0, 8192, -2*PI, 2*PI);  // Map the pulse count to an angle in rad
-  theta_R = d_map(count_R, 0, 8192, -2*PI, 2*PI);
-  
-  pos(EE,theta_L,theta_R,dTable[dStep]);
-  
-  t0 = 0;
+  while (EE[1] < 200) {
+    count_R = readEncoder(counter_top);
+    count_L = readEncoder(counter_bottom);
+    
+    theta_L = d_map(count_L, 0, 8192, -2*PI, 2*PI);  // Map the pulse count to an angle in rad
+    theta_R = d_map(count_R, 0, 8192, -2*PI, 2*PI);
+    
+    pos(EE,theta_L,theta_R,dTable[dStep]);
+    
+    t0 = 0;
+    vx[0] = 0;
+    vy[0] = 0;
+    vx[1] = 0;
+    vy[1] = 0;
+  }
 
 }
+
+int i = 0;
 
 void loop() {
   // put your main code here, to run repeatedly:
@@ -490,15 +527,18 @@ void loop() {
   
   pos(EE,theta_L,theta_R,dTable[dStep]);
   t = millis();
-  dt = t - t0;
+  dt = (t - t0);
   t0 = t;
   
   // Speed
   EEx1 = EE[0]; 
   EEy1 = EE[1];
-  vx = (fabs(EEx1 - EEx0)/dt)*1000;
-  vy = (fabs(EEy1 - EEy0)/dt)*1000;
-  
+  vx[2] = vx[1]/3.0 + vx[0]/3.0 + ((EEx1 - EEx0)*1000/dt)/3.0;
+  vy[2] = vy[1]/3.0 + vy[0]/3.0 + ((EEy1 - EEy0)*1000/dt)/3.0;
+  vx[1] = vx[2];
+  vy[1] = vy[2];  
+  vx[0] = vx[1];
+  vy[0] = vy[1]; 
   
   // Want to do this with a serialEvent() -> Look up the tutorial on Arduino site.  
   if (EE[0] > 6000) {
@@ -539,12 +579,17 @@ void loop() {
 //      penetration = 0;
 //    }
 
+    if (i>10) {
+      Serial.println(vy[2]);
+      i=0;
+    }
+    i++;
 
     // Also want to do this with serialEvent!!!!!    
 //    force((k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in positive x
-//    force((k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in negative x
+//    force(-(k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in negative x
 //    force(0,(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in positive y
-//    force(0,(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in negative y
+//    force(0,-(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in negative y
 
 //    force((c*vx),0,theta_L,theta_R,dTable[dStep]); // Force in positive x
 //    force(0,(c*vy),theta_L,theta_R,dTable[dStep]); // Force in positive y
@@ -555,10 +600,10 @@ void loop() {
 //    Serial.print(", ");
 //    Serial.println(dStep);
 
-    Serial.print(EE[0]);
-    Serial.print(", ");
-    Serial.print(EE[1]);
-    Serial.print(", ");
-    Serial.println(dt);
+//    Serial.println(vy[2]);
+//    Serial.print(", ");
+//    Serial.println(EEx1);
+//    Serial.print(", ");
+//    Serial.println(dt);
     
 }

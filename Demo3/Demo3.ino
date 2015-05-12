@@ -12,8 +12,9 @@ long k = 15000;
 long b = 500;
 long penetration;
 int spd;
-double dt,t,t0;
-int vx, vy;
+double dt;
+unsigned long t,t0;
+double vx, vy;
 
 double EEx0, EEy0, EEx1, EEy1;
 
@@ -494,8 +495,8 @@ void loop() {
   // Speed
   EEx1 = EE[0]; 
   EEy1 = EE[1];
-//  vx = fabs(EEx1 - EEx0)/dt;
-//  vy = fabs(EEy1 - EEy0)/dt;
+  vx = (fabs(EEx1 - EEx0)/dt)*1000;
+  vy = (fabs(EEy1 - EEy0)/dt)*1000;
   
   
   // Want to do this with a serialEvent() -> Look up the tutorial on Arduino site.  
@@ -553,10 +554,10 @@ void loop() {
 //    Serial.print(", ");
 //    Serial.println(dStep);
 
-//    Serial.print(vx);
-//    Serial.print(", ");
-//    Serial.print(vy);
-//    Serial.print(", ");
+    Serial.print(vx);
+    Serial.print(", ");
+    Serial.print(vy);
+    Serial.print(", ");
     Serial.println(dt);
     
 }

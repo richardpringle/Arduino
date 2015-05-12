@@ -255,6 +255,7 @@ void pos(double *in, double angleL, double angleR, double d){
   double y1, y2, y3;
   double p3x, p3y;
   double p[2];
+  int temp;
   
   p[0] = *in;        // Local position matrix
   
@@ -554,9 +555,9 @@ void loop() {
 //    Serial.print(", ");
 //    Serial.println(dStep);
 
-    Serial.print(vx);
+    Serial.print(EE[0]);
     Serial.print(", ");
-    Serial.print(vy);
+    Serial.print(EE[1]);
     Serial.print(", ");
     Serial.println(dt);
     

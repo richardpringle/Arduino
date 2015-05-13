@@ -533,8 +533,8 @@ void loop() {
   // Speed
   EEx1 = EE[0]; 
   EEy1 = EE[1];
-  vx[2] = vx[1]/3.0 + vx[0]/3.0 + ((EEx1 - EEx0)*1000/dt)/3.0;
-  vy[2] = vy[1]/3.0 + vy[0]/3.0 + ((EEy1 - EEy0)*1000/dt)/3.0;
+  vx[2] = (vx[0]/2.0 + ((EEx1 - EEx0)/dt)/2.0);
+  vy[2] = (vy[0]/2.0 + ((EEy1 - EEy0)/dt)/2.0);
   vx[1] = vx[2];
   vy[1] = vy[2];  
   vx[0] = vx[1];
@@ -579,11 +579,11 @@ void loop() {
 //      penetration = 0;
 //    }
 
-    if (i>10) {
-      Serial.println(vy[2]);
-      i=0;
-    }
-    i++;
+//    if (i>50) {
+      Serial.println(dt);
+//      i=0;
+//    }
+//    i++;
 
     // Also want to do this with serialEvent!!!!!    
 //    force((k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in positive x

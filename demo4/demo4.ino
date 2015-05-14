@@ -18,7 +18,7 @@ double EEx0, EEx1, EEx2, EEy0, EEy1, EEy2;
 double vx, vx0, vx1, vx2, vy, vy0, vy1, vy2;
 double bfx0, bfx1, bfx2, bfy0, bfy1, bfy2;
 // 2nd order Butterworth-filter coefficients
-double omega = tan(PI/32);
+double omega = tan(PI/64);
 double den = 1 + sqrt(2)*omega + pow(omega,2);
 double a1 = (2*(pow(omega,2)-1))/den;
 double a2 = (1 - sqrt(2)*omega + pow(omega,2))/den;
@@ -433,7 +433,7 @@ boolean check_x, check_y;
 boolean moving = false;
 // Loop Counters for debugging purposes since the Serial.print command significantly increased the loop period
 int i = 0;
-int j = 0;
+int j = 100;
 
 // Start Setup
 void setup() {
@@ -551,36 +551,33 @@ void loop() {
   
   // Read Position
   pos(EE,theta_L,theta_R,dTable[dStep]);
+  t = micros();
 
   // Velocity Estimation
-    
-  EEx2 = EE[0]; 
-  EEy2 = EE[1];
-  
-  check_x = (fabs(EEx2 - EEx1) > 0.5);
-  check_y = (fabs(EEy2 - EEy1) > 0.5);
-  
- if ( check_x || check_y ) {
-   moving = true;
-   j = 0;
- } else {
-   moving = false;
- }
+  if (!first_loop) {  
 
-  if (j < 100) {
+//    EEx2 = EE[0]; 
+//    EEy2 = EE[1];
+    EEx1 = EE[0]; 
+    EEy1 = EE[1];
     
-    t = micros();
+    check_x = (fabs(EEx1 - EEx0) > 0.5);
+    check_y = (fabs(EEy1 - EEy0) > 0.5);
+      
     dt = (t - t0);
     t0 = t;
     
-    vx2 = (EEx2 - EEx1)*1000000/dt;
-    vy2 = (EEy2 - EEy1)*1000000/dt;
-
+//    vx2 = (EEx2/2 - EEx0/2)*1000000/dt;
+//    vy2 = (EEy2/2 - EEy0/2)*1000000/dt;
+    
+    vx2 = (EEx1 - EEx0)*1000000/dt;
+    vy2 = (EEy1 - EEy0)*1000000/dt;
+  
     bfx2 = (b0*vx2 + b1*vx1 + b2*vx0 - a1*bfx1 - a2*bfx0);
     bfy2 = (b0*vy2 + b1*vy1 + b2*vy0 - a1*bfy1 - a2*bfy0);
     
-    EEx1 = EEx2;
-    EEy1 = EEy2;
+//    EEx1 = EEx2;
+//    EEy1 = EEy2;
     EEx0 = EEx1;
     EEy0 = EEy1;
     vx1 = vx2;
@@ -592,9 +589,13 @@ void loop() {
     bfx0 = bfx1;
     bfy0 = bfy1;
     
-    j++;
+    bfx2 = (fabs(bfx2) < 5.0) ? 0 : bfx2;    
+    bfy2 = (fabs(bfy2) < 5.0) ? 0 : bfy2; 
+        
   }
-    
+  
+  
+
   
   // Want to do this with a serialEvent() -> Look up the tutorial on Arduino site.  
   if (EE[0] > 6000) {
@@ -635,7 +636,9 @@ void loop() {
 //      penetration = 0;
 //    }
 
-    if (i>99) {
+    if (!(i%4)) {
+//      Serial.println(EE[1]);
+//      Serial.println(vy2);
       Serial.println(bfy2);
       i=0;
     }

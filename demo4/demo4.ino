@@ -12,12 +12,19 @@ long k = 15000;
 long b = 10;
 long penetration;
 int spd;
-double dt;
+int dt;
 unsigned long t,t0;
 double EEx0, EEx1, EEx2, EEy0, EEy1, EEy2;
-double vx0, vx1, vx2, vy0, vy1, vy2;
+double vx, vx0, vx1, vx2, vy, vy0, vy1, vy2;
+double bfx0, bfx1, bfx2, bfy0, bfy1, bfy2;
 // 2nd order Butterworth-filter coefficients
-double omega, den, a1, a2, b0, b1, b2;
+double omega = tan(PI/32);
+double den = 1 + sqrt(2)*omega + pow(omega,2);
+double a1 = (2*(pow(omega,2)-1))/den;
+double a2 = (1 - sqrt(2)*omega + pow(omega,2))/den;
+double b0 = (pow(omega,2))/den;
+double b1 = (2*pow(omega,2))/den;
+double b2 = (pow(omega,2))/den;
 
 // START Lookup Table
 // Initialize lookup table for base joint distance
@@ -422,8 +429,11 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
 
 // Allows the first loop to run differently
 boolean first_loop = true;
-// Loop Counter for debugging purposes since the Serial.print command significantly increased the loop period
+boolean check_x, check_y;
+boolean moving = false;
+// Loop Counters for debugging purposes since the Serial.print command significantly increased the loop period
 int i = 0;
+int j = 0;
 
 // Start Setup
 void setup() {
@@ -515,6 +525,10 @@ void setup() {
   vy0 = 0;
   vx1 = 0;
   vy1 = 0;
+  bfx0 = 0;
+  bfy0 = 0;
+  bfx1 = 0;
+  bfy1 = 0;
   
   Serial.println("3");
   delay(1000);
@@ -539,34 +553,47 @@ void loop() {
   pos(EE,theta_L,theta_R,dTable[dStep]);
 
   // Velocity Estimation
-  t = millis();
-  dt = (t - t0);
-  t0 = t;
-  
-  omega = tan(PI/4);
-  den = 1 + sqrt(2)*omega + pow(omega,2);
-  a1 = (2*(pow(omega,2)-1))/den;
-  a2 = (1 - sqrt(2)*omega + pow(omega,2))/den;
-  b0 = (pow(omega,2))/den;
-  b1 = (2*pow(omega,2))/den;
-  b2 = (pow(omega,2))/den;
-  
+    
   EEx2 = EE[0]; 
   EEy2 = EE[1];
-  vx1 = ;
-  vx0 = ;
-
-  vx2 = (b0*EEx2 + b1*EEx1 + b2*EEx0 - a1*vx1 - a2*vx0);
-  vy2 = (b0*EEy2 + b1*EEy1 + b2*EEy0 - a1*vy1 - a2*vy0);
   
-  EEx1 = EEx2;
-  EEy1 = EEy2;
-  EEx0 = EEx1;
-  EEy0 = EEy1;
-  vx1 = vx2;
-  vy1 = vy2;  
-  vx0 = vx1;
-  vy0 = vy1;
+  check_x = (fabs(EEx2 - EEx1) > 0.5);
+  check_y = (fabs(EEy2 - EEy1) > 0.5);
+  
+ if ( check_x || check_y ) {
+   moving = true;
+   j = 0;
+ } else {
+   moving = false;
+ }
+
+  if (j < 100) {
+    
+    t = micros();
+    dt = (t - t0);
+    t0 = t;
+    
+    vx2 = (EEx2 - EEx1)*1000000/dt;
+    vy2 = (EEy2 - EEy1)*1000000/dt;
+
+    bfx2 = (b0*vx2 + b1*vx1 + b2*vx0 - a1*bfx1 - a2*bfx0);
+    bfy2 = (b0*vy2 + b1*vy1 + b2*vy0 - a1*bfy1 - a2*bfy0);
+    
+    EEx1 = EEx2;
+    EEy1 = EEy2;
+    EEx0 = EEx1;
+    EEy0 = EEy1;
+    vx1 = vx2;
+    vy1 = vy2;  
+    vx0 = vx1;
+    vy0 = vy1;
+    bfx1 = bfx2;
+    bfy1 = bfy2;  
+    bfx0 = bfx1;
+    bfy0 = bfy1;
+    
+    j++;
+  }
     
   
   // Want to do this with a serialEvent() -> Look up the tutorial on Arduino site.  
@@ -596,11 +623,11 @@ void loop() {
          digitalWrite(slp,LOW);
    }
    
-//    if (EE[1] < 170) {
-//      penetration = 170 - EE[1];
-//    } else {
-//      penetration = 0;
-//    }
+    if (EE[1] < 170) {
+      penetration = 170 - EE[1];
+    } else {
+      penetration = 0;
+    }
     
 //    if (EE[0] < -60) {
 //      penetration = -60 - EE[0];
@@ -609,7 +636,7 @@ void loop() {
 //    }
 
     if (i>99) {
-      Serial.println(vy2);
+      Serial.println(bfy2);
       i=0;
     }
     i++;
@@ -617,7 +644,7 @@ void loop() {
     // Also want to do this with serialEvent!!!!!    
 //    force((k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in positive x
 //    force(-(k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in negative x
-//    force(0,(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in positive y
+    force(0,(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in positive y
 //    force(0,-(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in negative y
 
 //    force((c*vx),0,theta_L,theta_R,dTable[dStep]); // Force in positive x

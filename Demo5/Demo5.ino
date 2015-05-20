@@ -581,7 +581,9 @@ void loop() {
     V[1] = bfy2;    
         
   }
-  // END Velocity Estimation 
+  // END Velocity Estimation
+ 
+  first_loop = false;
   
 }
 

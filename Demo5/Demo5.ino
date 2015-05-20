@@ -429,7 +429,7 @@ void setup() {
   // put your setup code here, to run once:
 
   // START Stepper
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode(dir,OUTPUT);
   pinMode(stp,OUTPUT);
   pinMode(slp,OUTPUT);
@@ -587,7 +587,7 @@ void loop() {
   
 }
 
-void SerialEvent() {
+void serialEvent() {
   if ( Serial.available() ) {
     garbage = Serial.read();
     Serial.println(EE[1]);

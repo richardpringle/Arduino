@@ -1,19 +1,21 @@
 #include <SPI.h>
 #include <math.h>
 
+byte garbage;
+
 // Link Lengths
 double L1 = 105.000;      // Crank-arm length
 double L2 = 138.000;      // Coupler-link length
 
-// Variables for loop()
-double thetaL, thetaR;
-  
+// For force generation in on-board-Arduino environment  
 long k = 18000;
 long b = 750;
 long penetration;
 long damping;
 long wall;
 int spd;
+
+// For calculating speed
 int dt;
 unsigned long t,t0;
 double EEx0, EEx1, EEx2, EEy0, EEy1, EEy2;
@@ -27,6 +29,8 @@ double a2 = (1 - sqrt(2)*omega + pow(omega,2))/den;
 double b0 = (pow(omega,2))/den;
 double b1 = (2*pow(omega,2))/den;
 double b2 = (pow(omega,2))/den;
+
+//
 
 // START Lookup Table
 // Initialize lookup table for base joint distance
@@ -129,9 +133,7 @@ long count_L, count_R;
 double theta_L, theta_R;
 
 double EE[2];// EE[0] = x, EE[1] = y
-
-// I'm pretty sure all these byte variables should be #define
-// and same goes for the counter_top and counter_bottom
+double V[2]; // V[0] = vx, V[0] = vy -> both filtered with butterworth filter
 
 // Instruction Register (8 bits)
 // instruction bits (B7 and B6)
@@ -287,34 +289,19 @@ void pos(double *in, double angleL, double angleR, double d){
   p3x = x2 - 0.5*L3*cos(angle3);                      // [p3x,p3y] connects the origin to L3 and L4
   p3y = y2 - copysign(0.5*L3*sin(angle3),(y2-y1));    // If (y2 > y1) EE will be in quadrant II
 
-  // Not Filtering or rounding
   p[0] = p3x + L4*cos(angle4);    // p[0] == EEx
   p[1] = p3y + L4*sin(angle4);    // p[1] == EEy
-
-//  // START Filtering and rounding
-//  p[0] = round((p3x + L4*cos(angle4))*100);    // p[0] == EEx
-//  p[1] = round((p3y + L4*sin(angle4))*100);    // p[1] == EEy
-//  
-//  temp0 = p[0]/10;
-//  temp1 = p[1]/10;
-//  temp0 /= 2;
-//  temp1 /= 2;
-//  p[0] = temp0/5.0;
-//  p[1] = temp1/5.0;
-//  
-//  temp0 = (p[0] + EE[0])*5;
-//  temp1 = (p[1] + EE[1])*5;
-//  temp0 /= 5;
-//  temp1 /= 5;
-//  p[0] = temp0/2.0;
-//  p[1] = temp1/2.0;
-//  // END Filtering
   
   *in = p[0];
   in += 1;
   *in = p[1];  
 }
 // END Forward Kinematics
+
+
+// START Velocity Calculation with Filter
+/* Might transfer the velocity estimation here later */
+// END Velocity
 
 
 // START Driver
@@ -532,12 +519,12 @@ void setup() {
   bfx1 = 0;
   bfy1 = 0;
   
-  Serial.println("3");
-  delay(1000);
-  Serial.println("2");
-  delay(1000);
-  Serial.println("1");
-  delay(1000);
+//  Serial.println("3");
+//  delay(1000);
+//  Serial.println("2");
+//  delay(1000);
+//  Serial.println("1");
+//  delay(1000);
 }
 
 void loop() {
@@ -556,30 +543,25 @@ void loop() {
   t = micros();
 
   // Velocity Estimation
-  if (!first_loop) {  
+  if (!first_loop) {  // on the first loop dt is too small and vx2, vy2 both approach infinity
 
-//    EEx2 = EE[0]; 
-//    EEy2 = EE[1];
+    // get current position
     EEx1 = EE[0]; 
     EEy1 = EE[1];
     
-    check_x = (fabs(EEx1 - EEx0) > 0.5);
-    check_y = (fabs(EEy1 - EEy0) > 0.5);
-      
+    // Find time elapsed between NOW and LAST position reading  
     dt = (t - t0);
     t0 = t;
     
-//    vx2 = (EEx2/2 - EEx0/2)*1000000/dt;
-//    vy2 = (EEy2/2 - EEy0/2)*1000000/dt;
-    
+    // Calculate Position based on backwards difference
     vx2 = (EEx1 - EEx0)*1000000/dt;
     vy2 = (EEy1 - EEy0)*1000000/dt;
   
+    // Apply butterworth filter with coefficients from top of program
     bfx2 = (b0*vx2 + b1*vx1 + b2*vx0 - a1*bfx1 - a2*bfx0);
     bfy2 = (b0*vy2 + b1*vy1 + b2*vy0 - a1*bfy1 - a2*bfy0);
     
-//    EEx1 = EEx2;
-//    EEy1 = EEy2;
+    // Take positions and velocities from NOW and cycle them the LAST position and velocity variables
     EEx0 = EEx1;
     EEy0 = EEy1;
     vx1 = vx2;
@@ -591,90 +573,24 @@ void loop() {
     bfx0 = bfx1;
     bfy0 = bfy1;
     
+    // Filter out any velocity values less than 5 [mm/s] -> (Not sure about the units)
     bfx2 = (fabs(bfx2) < 5.0) ? 0 : bfx2;    
-    bfy2 = (fabs(bfy2) < 5.0) ? 0 : bfy2; 
+    bfy2 = (fabs(bfy2) < 5.0) ? 0 : bfy2;
+
+    V[0] = bfx2;    
+    V[1] = bfy2;    
         
   }
+  // END Velocity Estimation 
   
-  
-
-  
-  // Want to do this with a serialEvent() -> Look up the tutorial on Arduino site.  
-  if (EE[0] > 6000) {
-    digitalWrite(slp,HIGH);
-    digitalWrite(dir,HIGH);
-    for (int i=0;i<265;i++) {
-      digitalWrite(stp,LOW);
-      delayMicroseconds(1000);
-      digitalWrite(stp,HIGH);
-      delayMicroseconds(1000);
-      dStep++;
-    }    
-  } else if (EE[0] < -6000) {
-       digitalWrite(slp,HIGH);
-       digitalWrite(dir,LOW);
-       for (int i=0;i<265;i++) {
-          digitalWrite(stp,LOW);
-          delayMicroseconds(1000);
-          digitalWrite(stp,HIGH);
-          delayMicroseconds(1000);
-          dStep--;    
-       }
-       if (dStep < 0) { dStep = 0; }
-       if (dStep > 1100) { dStep = 1100; }      
-   } else {
-         digitalWrite(slp,LOW);
-   }
-   
-    if (EE[1] < 170) {
-      penetration = 170 - EE[1];
-      damping = b*bfy2;
-      wall = (k*penetration) - damping;
-    } else {
-      penetration = 0;
-      damping = 0;
-      wall = 0;
-    }
-    
-//    if (EE[0] < -60) {
-//      penetration = -60 - EE[0];
-//    } else {
-//      penetration = 0;
-//    }
-
-//    if (!(i%10)) {
-      if (false) {
-//      Serial.println(EE[1]);
-//      Serial.println(vy2);
-      Serial.println(bfy2);
-      i=0;
-    }
-    i++;
-
-    // Also want to do this with serialEvent!!!!!    
-//    force((k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in positive x
-//    force(-(k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in negative x
-//    force(0,(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in positive y
-//    force(0,-(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in negative y
-
-//    force((c*vx),0,theta_L,theta_R,dTable[dStep]); // Force in positive x
-
-//    if (bfy2 < 0) {
-//      force(0,-(b*bfy2),theta_L,theta_R,dTable[dStep]); // Force in positive y
-//    }
-
-      force(0,wall,theta_L,theta_R,dTable[dStep]); // Force in positive y
-
-//    Serial.print(EE[0]);
-//    Serial.print(", ");
-//    Serial.print(EE[1]);
-//    Serial.print(", ");
-//    Serial.println(dStep);
-
-//    Serial.println(vy[2]);
-//    Serial.print(", ");
-//    Serial.println(EEx1);
-//    Serial.print(", ");
-//    Serial.println(dt);
-  first_loop = false;    
 }
+
+void SerialEvent() {
+  if ( Serial.available() ) {
+    garbage = Serial.read();
+    Serial.println(EE[1]);
+    Serial.println(V[1]);
+  }
+}
+
+

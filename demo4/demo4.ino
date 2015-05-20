@@ -8,9 +8,11 @@ double L2 = 138.000;      // Coupler-link length
 // Variables for loop()
 double thetaL, thetaR;
   
-long k = 15000;
-long b = 10;
+long k = 18000;
+long b = 750;
 long penetration;
+long damping;
+long wall;
 int spd;
 int dt;
 unsigned long t,t0;
@@ -418,8 +420,8 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
   TL = fabs(TL);
   TR = fabs(TR);
   
-  if (TL > 3200) {TL = 3200;}
-  if (TR > 3200) {TR = 3200;}  
+  if (TL > 3000) {TL = 3000;}
+  if (TR > 3000) {TR = 3000;}  
   
   compact1(direcL,speedByte1(TL),speedByte2(TL));     // Driver1 is the bottom (angleL)
   compact2(direcR,speedByte1(TR),speedByte2(TR));     // Driver2 is the top (angleR) 
@@ -626,8 +628,12 @@ void loop() {
    
     if (EE[1] < 170) {
       penetration = 170 - EE[1];
+      damping = b*bfy2;
+      wall = (k*penetration) - damping;
     } else {
       penetration = 0;
+      damping = 0;
+      wall = 0;
     }
     
 //    if (EE[0] < -60) {
@@ -636,7 +642,8 @@ void loop() {
 //      penetration = 0;
 //    }
 
-    if (!(i%4)) {
+//    if (!(i%10)) {
+      if (false) {
 //      Serial.println(EE[1]);
 //      Serial.println(vy2);
       Serial.println(bfy2);
@@ -647,11 +654,16 @@ void loop() {
     // Also want to do this with serialEvent!!!!!    
 //    force((k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in positive x
 //    force(-(k*penetration),0,theta_L,theta_R,dTable[dStep]); // Force in negative x
-    force(0,(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in positive y
+//    force(0,(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in positive y
 //    force(0,-(k*penetration),theta_L,theta_R,dTable[dStep]); // Force in negative y
 
 //    force((c*vx),0,theta_L,theta_R,dTable[dStep]); // Force in positive x
-//    force(0,(c*vy),theta_L,theta_R,dTable[dStep]); // Force in positive y
+
+//    if (bfy2 < 0) {
+//      force(0,-(b*bfy2),theta_L,theta_R,dTable[dStep]); // Force in positive y
+//    }
+
+      force(0,wall,theta_L,theta_R,dTable[dStep]); // Force in positive y
 
 //    Serial.print(EE[0]);
 //    Serial.print(", ");

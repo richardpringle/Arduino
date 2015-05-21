@@ -2,6 +2,7 @@
 #include <math.h>
 
 byte garbage;
+boolean sEvent = false;
 
 // Link Lengths
 double L1 = 105.000;      // Crank-arm length
@@ -519,12 +520,12 @@ void setup() {
   bfx1 = 0;
   bfy1 = 0;
   
-//  Serial.println("3");
-//  delay(1000);
-//  Serial.println("2");
-//  delay(1000);
-//  Serial.println("1");
-//  delay(1000);
+  Serial.println("3");
+  delay(1000);
+  Serial.println("2");
+  delay(1000);
+  Serial.println("1");
+  delay(1000);
 }
 
 void loop() {
@@ -588,11 +589,10 @@ void loop() {
 }
 
 void serialEvent() {
-  if ( Serial.available() ) {
+//  if ( Serial.available() ) {
     garbage = Serial.read();
     Serial.println(EE[1]);
-    Serial.println(V[1]);
-  }
+//  }
 }
 
 

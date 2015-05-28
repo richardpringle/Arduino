@@ -6,6 +6,8 @@ typedef union {
  byte binary[4];
 } binaryFloat;
 
+binaryFloat data;
+
 byte garbage;
 boolean sEvent = false;
 
@@ -257,7 +259,7 @@ void loadEncoder(int counter) {
 
 // START Forward Kinematics
 // Position function using the angles and the forward kinematics
-void pos(double *in, double angleL, double angleR, double d){
+void pos(float *in, double angleL, double angleR, double d){
   double L3, L4;
   double angle3, angle4;
   double x1, x2, x3;
@@ -578,8 +580,9 @@ void loop() {
 
 void serialEvent() {
   if ( Serial.available() ) {
+    data.floatingPoint = EE[1];
     garbage = Serial.read();
-    Serial.println(EE[1]);
+    Serial.println(data.binary, 4);
   }
 }
 

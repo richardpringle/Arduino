@@ -582,7 +582,7 @@ void serialEvent() {
   if ( Serial.available() ) {
     data.floatingPoint = EE[1];
     garbage = Serial.read();
-    Serial.println(data.binary, 4);
+    Serial.write(data.binary, 4);
   }
 }
 

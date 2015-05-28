@@ -1,6 +1,11 @@
 #include <SPI.h>
 #include <math.h>
 
+typedef union {
+ float floatingPoint;
+ byte binary[4];
+} binaryFloat;
+
 byte garbage;
 boolean sEvent = false;
 
@@ -31,7 +36,6 @@ double b0 = (pow(omega,2))/den;
 double b1 = (2*pow(omega,2))/den;
 double b2 = (pow(omega,2))/den;
 
-//
 
 // START Lookup Table
 // Initialize lookup table for base joint distance
@@ -133,8 +137,8 @@ void thirtysecondthStep() {
 long count_L, count_R;
 double theta_L, theta_R;
 
-double EE[2];// EE[0] = x, EE[1] = y
-double V[2]; // V[0] = vx, V[0] = vy -> both filtered with butterworth filter
+float EE[2];// EE[0] = x, EE[1] = y
+float V[2]; // V[0] = vx, V[1] = vy -> both filtered with butterworth filter
 
 // Instruction Register (8 bits)
 // instruction bits (B7 and B6)
@@ -246,16 +250,7 @@ void clearEncoder(int counter) {
 // Load starting point number into CNTR to solve negative number problem
 // Not needed when using INDEX
 void loadEncoder(int counter) {
-  // Load DTR with 8 times the number of counts per revolution
-  // Why 8: 4x quad mode then multiply by 2 so that the counter can count one full revolution down or up
-//  SPI.transfer(counter,WR+DTR,SPI_CONTINUE);
-//  SPI.transfer(counter,0x0F,SPI_CONTINUE);
-//  SPI.transfer(counter,0xFF,SPI_LAST);
   SPI.transfer(counter,LOAD+CNTR);  // Loads counter with number from DTR
-//  // reset DTR to range limit
-//  SPI.transfer(counter_top,WR+DTR,SPI_CONTINUE);
-//  SPI.transfer(counter_top,0x10,SPI_CONTINUE);
-//  SPI.transfer(counter_top,0x00,SPI_LAST);
 }
 // END Counter
 
@@ -425,9 +420,8 @@ boolean moving = false;
 int i = 0;
 int j = 100;
 
-// Start Setup
+// START Setup
 void setup() {
-  // put your setup code here, to run once:
 
   // START Stepper
   Serial.begin(115200);
@@ -460,16 +454,12 @@ void setup() {
   
   
   // START Counter
-    // initEncoder includes loading DTR
+  // initEncoder includes loading DTR
   // DTR is loaded to CNTR at INDEX pulsse
   initEncoder(counter_top);
   initEncoder(counter_bottom);
-//  clearEncoder(counter_top);
-//  clearEncoder(counter_bottom);
   loadEncoder(counter_top);
   loadEncoder(counter_bottom);
-  
-//  Serial1.begin(115200);
   
   delay(1000);
   // END Counter
@@ -490,18 +480,14 @@ void setup() {
   delay(1000);
   // END Driver
 
-
-//  // For initilization at 0 deg
-//  EE[0] = 0;
-//  EE[1] = 89.0; 
-
   // Get inital position
   // Could combine if I want to increase speed
   while (EE[1] < 200) {
     count_R = readEncoder(counter_top);
     count_L = readEncoder(counter_bottom);
     
-    theta_L = d_map(count_L, 0, 8192, -2*PI, 2*PI);  // Map the pulse count to an angle in rad
+    // Map the pulse count to an angle in rad
+    theta_L = d_map(count_L, 0, 8192, -2*PI, 2*PI);  
     theta_R = d_map(count_R, 0, 8192, -2*PI, 2*PI);
     
     pos(EE,theta_L,theta_R,dTable[dStep]);
@@ -527,6 +513,8 @@ void setup() {
   Serial.println("1");
   delay(1000);
 }
+// END Setup
+
 
 void loop() {
   // put your main code here, to run repeatedly:
@@ -589,10 +577,10 @@ void loop() {
 }
 
 void serialEvent() {
-//  if ( Serial.available() ) {
+  if ( Serial.available() ) {
     garbage = Serial.read();
     Serial.println(EE[1]);
-//  }
+  }
 }
 
 

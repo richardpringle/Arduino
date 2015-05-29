@@ -1,14 +1,19 @@
 #include <SPI.h>
 #include <math.h>
 
-typedef union {
+union binaryFloat 
+{
  float floatingPoint;
  byte binary[4];
-} binaryFloat;
+};
 
-byte inBytes[2];
+union binaryFloat inData[2];
+union binaryFloat outData[4];
 
-binaryFloat data;
+byte inBytes[8];
+byte outBytes[16];
+
+//binaryFloat data0, data1, data2, data3;
 
 byte garbage;
 boolean sEvent = false;
@@ -400,29 +405,31 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
     direcR = motor_reverse;
   }
   
-//  Serial.print(TR);
-//  Serial.print(", ");
-//  Serial.println(TL);
+  ////////////////////////!!!!!!!!!!!!!!!!!!!!!!
+/* do the absolute value */  
+//  TL = fabs(TL);
+//  TR = fabs(TR);
   
-  TL = fabs(TL);
-  TR = fabs(TR);
-  
+  // Until I get a better power supply
   if (TL > 3000) {TL = 3000;}
-  if (TR > 3000) {TR = 3000;}  
+  if (TR > 3000) {TR = 3000;}
+  if ((TL + TR) > 3800) {TL = 1900;TR=1900;}  
   
-  compact1(direcL,speedByte1(TL),speedByte2(TL));     // Driver1 is the bottom (angleL)
-  compact2(direcR,speedByte1(TR),speedByte2(TR));     // Driver2 is the top (angleR) 
+//  compact1(direcL,speedByte1(TL),speedByte2(TL));     // Driver1 is the bottom (angleL)
+//  compact2(direcR,speedByte1(TR),speedByte2(TR));     // Driver2 is the top (angleR)
+
+////////////////////////!!!!!!!!!!!!!!!!!!!!!!
+/* change this next part once I am getting the correct values */
   
 }
 // END Force
 
+
 // Allows the first loop to run differently
 boolean first_loop = true;
-boolean check_x, check_y;
-boolean moving = false;
-// Loop Counters for debugging purposes since the Serial.print command significantly increased the loop period
-int i = 0;
-int j = 100;
+// Iterators:
+int i,j,n;
+
 
 // START Setup
 void setup() {
@@ -575,6 +582,23 @@ void loop() {
         
   }
   // END Velocity Estimation
+  
+  // Buffer EE state [x,y,xdot,ydot]
+  outData[0].floatingPoint = EE[0];
+  outData[1].floatingPoint = EE[1];
+  outData[2].floatingPoint = V[0];
+  outData[3].floatingPoint = V[1];
+  i=0;
+  j=0;
+  while (i<16) {
+    k = 0;
+    while (n<4) {
+      outBytes[i] = outData[j].binary[n];
+      ++i;
+      ++n;      
+    }
+    ++j;
+  }
  
   first_loop = false;
   
@@ -582,10 +606,10 @@ void loop() {
 
 void serialEvent() {
   if ( Serial.available() ) {
-    data.floatingPoint = EE[1];
-    garbage = Serial.readBytes(inBytes, 2);
-    Serial.write(data.binary, 4);
-//    Serial.write(inBytes, 2);
+//    garbage = Serial.readBytes(inBytes, 8);
+//    Serial.write(outBytes, 16);
+    garbage = Serial.read();
+    serial.write(outBytes, 16);  
   }
 }
 

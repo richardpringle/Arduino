@@ -6,6 +6,8 @@ typedef union {
  byte binary[4];
 } binaryFloat;
 
+byte inBytes[2];
+
 binaryFloat data;
 
 byte garbage;
@@ -484,16 +486,16 @@ void setup() {
 
   // Get inital position
   // Could combine if I want to increase speed
-  while (EE[1] < 200) {
-    count_R = readEncoder(counter_top);
-    count_L = readEncoder(counter_bottom);
-    
-    // Map the pulse count to an angle in rad
-    theta_L = d_map(count_L, 0, 8192, -2*PI, 2*PI);  
-    theta_R = d_map(count_R, 0, 8192, -2*PI, 2*PI);
-    
-    pos(EE,theta_L,theta_R,dTable[dStep]);
-  }
+//  while (EE[1] < 200) {
+//    count_R = readEncoder(counter_top);
+//    count_L = readEncoder(counter_bottom);
+//    
+//    // Map the pulse count to an angle in rad
+//    theta_L = d_map(count_L, 0, 8192, -2*PI, 2*PI);  
+//    theta_R = d_map(count_R, 0, 8192, -2*PI, 2*PI);
+//    
+//    pos(EE,theta_L,theta_R,dTable[dStep]);
+//  }
   
   EEx0 = EE[0];
   EEy0 = EE[1];
@@ -581,8 +583,9 @@ void loop() {
 void serialEvent() {
   if ( Serial.available() ) {
     data.floatingPoint = EE[1];
-    garbage = Serial.read();
+    garbage = Serial.readBytes(inBytes, 2);
     Serial.write(data.binary, 4);
+//    Serial.write(inBytes, 2);
   }
 }
 

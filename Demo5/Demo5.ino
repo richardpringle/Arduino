@@ -591,7 +591,7 @@ void loop() {
   i=0;
   j=0;
   while (i<16) {
-    k = 0;
+    n = 0;
     while (n<4) {
       outBytes[i] = outData[j].binary[n];
       ++i;
@@ -606,10 +606,36 @@ void loop() {
 
 void serialEvent() {
   if ( Serial.available() ) {
-//    garbage = Serial.readBytes(inBytes, 8);
+    Serial.readBytes(inBytes, 8);
+    i=0;
+    j=0;
+    while (i<8) {
+      n = 0;
+      while (n<4) {
+        inData[j].binary[n] = inBytes[i];
+        ++i;
+        ++n;      
+      }
+      ++j;
+    }
+    
+    // Temporary output to verify input
+    outData[0].floatingPoint = inData[0].floatingPoint;
+    outData[1].floatingPoint = inData[1].floatingPoint;
+    i=0;
+    j=0;
+    while (i<8) {
+      n = 0;
+      while (n<4) {
+        outBytes[i] = outData[j].binary[n];
+        ++i;
+        ++n;      
+      }
+      ++j;
+    }
+    
 //    Serial.write(outBytes, 16);
-    garbage = Serial.read();
-    serial.write(outBytes, 16);  
+    Serial.println(outBytes, 8);
   }
 }
 

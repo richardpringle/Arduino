@@ -635,7 +635,7 @@ void serialEvent() {
     }
     
 //    Serial.write(outBytes, 16);
-    Serial.println(outBytes, 8);
+    Serial.print(outBytes[1].floatingPoint);
   }
 }
 

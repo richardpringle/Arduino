@@ -415,7 +415,7 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
   if (TR > 3000) {TR = 3000;}
   if ((TL + TR) > 3800) {TL = 1900;TR=1900;}  
   
-//  compact1(direcL,speedByte1(TL),speedByte2(TL));     // Driver1 is the bottom (angleL)
+//  compact1(direcL,speedByte1(TL),speedByte2(TL));     // Driver1 is the bottom (angleL)as
 //  compact2(direcR,speedByte1(TR),speedByte2(TR));     // Driver2 is the top (angleR)
 
 ////////////////////////!!!!!!!!!!!!!!!!!!!!!!
@@ -621,8 +621,12 @@ void serialEvent() {
       }
       ++j;
     }
-    force(inData[0].floatingPoint, inData[1].floatingPoint, theta_L, theta_R, dTable[dStep]);
-//    Serial.write(outBytes, 16);
+    // IF force is zero don't write command
+    //write code here:
+    if ((inData[0].floatingPoint > 1.0) && (inData[1].floatingPoint > 1.0)) {
+      force(inData[0].floatingPoint, inData[1].floatingPoint, theta_L, theta_R, dTable[dStep]);
+    }    
+    Serial.write(outBytes, 16);
   }
 }
 

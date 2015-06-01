@@ -420,6 +420,9 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
 
 ////////////////////////!!!!!!!!!!!!!!!!!!!!!!
 /* change this next part once I am getting the correct values */
+
+  Serial.print(TL);
+  Serial.print(TR);
   
 }
 // END Force
@@ -618,24 +621,8 @@ void serialEvent() {
       }
       ++j;
     }
-    
-    // Temporary output to verify input
-    outData[0].floatingPoint = inData[0].floatingPoint;
-    outData[1].floatingPoint = inData[1].floatingPoint;
-    i=0;
-    j=0;
-    while (i<8) {
-      n = 0;
-      while (n<4) {
-        outBytes[i] = outData[j].binary[n];
-        ++i;
-        ++n;      
-      }
-      ++j;
-    }
-    
+    force(inData[0].floatingPoint, inData[1].floatingPoint, theta_L, theta_R, dTable[dStep]);
 //    Serial.write(outBytes, 16);
-    Serial.print(outBytes[1].floatingPoint);
   }
 }
 

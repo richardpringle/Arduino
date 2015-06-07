@@ -626,8 +626,8 @@ void serialEvent() {
     if ((inData[0].floatingPoint > 1.0) && (inData[1].floatingPoint > 1.0)) {
       force(inData[0].floatingPoint, inData[1].floatingPoint, theta_L, theta_R, dTable[dStep]);
     }    
-//    Serial.write(outBytes, 16);
-    Serial.println("It worked!");
+    Serial.write(outBytes, 16);
+
   }
 }
 

@@ -8,7 +8,7 @@ union binaryFloat
 };
 
 union binaryFloat inData[2];
-union binaryFloat outData[4];
+union binaryFloat outData[5];
 
 byte inBytes[8];
 byte outBytes[16];
@@ -50,6 +50,7 @@ double b2 = (pow(omega,2))/den;
 // Initialize lookup table for base joint distance
 double dTable[1100];
 int dStep;
+boolean out = true;
 
 void base(double *in){
   	
@@ -422,6 +423,37 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
 // END Force
 
 
+// START Step
+void stepperMove(byte out) {
+  if (out == 0x0A) {
+    digitalWrite(slp,HIGH);
+    digitalWrite(dir,HIGH);
+    for (int i=0;i<265;i++) {
+      digitalWrite(stp,LOW);
+      delayMicroseconds(1000);
+      digitalWrite(stp,HIGH);
+      delayMicroseconds(1000);
+      if (++dStep == 1100) {break;}      
+    }
+    digitalWrite(slp,LOW);    
+  } else if (out == 0x0B) {
+    digitalWrite(slp,HIGH);
+    digitalWrite(dir,LOW);
+    for (int i=0;i<265;i++) {
+      digitalWrite(stp,LOW);
+      delayMicroseconds(1000);
+      digitalWrite(stp,HIGH);
+      delayMicroseconds(1000);
+      if (--dStep == 0){break;}    
+    }
+    digitalWrite(slp,LOW);     
+  } else {
+    digitalWrite(slp,LOW);
+  }
+}
+// END Step
+
+
 // Allows the first loop to run differently
 boolean first_loop = true;
 // Iterators:
@@ -603,10 +635,10 @@ void loop() {
 
 void serialEvent() {
   if ( Serial.available() ) {
-    Serial.readBytes(inBytes, 8);
-    i=0;
+    Serial.readBytes(inBytes, 9);
+    i=1;
     j=0;
-    while (i<8) {
+    while (i<9) {
       n = 0;
       while (n<4) {
         inData[j].binary[n] = inBytes[i];
@@ -614,6 +646,9 @@ void serialEvent() {
         ++n;      
       }
       ++j;
+    }
+    if (inBytes[0]) {
+      stepperMove(inBytes[0];
     }
     // IF force is greater than zero, write a force
 //    if ((inData[0].floatingPoint > 1.0) && (inData[1].floatingPoint > 1.0)) {

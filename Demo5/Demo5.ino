@@ -8,9 +8,9 @@ union binaryFloat
 };
 
 union binaryFloat inData[2];
-union binaryFloat outData[5];
+union binaryFloat outData[4];
 
-byte inBytes[8];
+byte inBytes[9];
 byte outBytes[16];
 
 //binaryFloat data0, data1, data2, data3;
@@ -648,7 +648,7 @@ void serialEvent() {
       ++j;
     }
     if (inBytes[0]) {
-      stepperMove(inBytes[0];
+      stepperMove(inBytes[0]);
     }
     // IF force is greater than zero, write a force
 //    if ((inData[0].floatingPoint > 1.0) && (inData[1].floatingPoint > 1.0)) {

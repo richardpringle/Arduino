@@ -145,7 +145,7 @@ void thirtysecondthStep() {
 
 // START Counter
 long count_L, count_R;
-double theta_L, theta_R;
+double theta_L, theta_R, F_theta_L, F_theta_R;
 
 float EE[2];// EE[0] = x, EE[1] = y
 float V[2]; // V[0] = vx, V[1] = vy -> both filtered with butterworth filter
@@ -425,7 +425,7 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
 
 // START Step
 void stepperMove(byte out) {
-  if (out == 0x0A) {
+  if ((out == 0x0A) && (dStep < 795)) {
     digitalWrite(slp,HIGH);
     digitalWrite(dir,HIGH);
     for (int i=0;i<265;i++) {
@@ -433,10 +433,10 @@ void stepperMove(byte out) {
       delayMicroseconds(1000);
       digitalWrite(stp,HIGH);
       delayMicroseconds(1000);
-      if (++dStep == 1100) {break;}      
+      dStep++;      
     }
     digitalWrite(slp,LOW);    
-  } else if (out == 0x0B) {
+  } else if ((out == 0x0B) && (dStep > 0)) {
     digitalWrite(slp,HIGH);
     digitalWrite(dir,LOW);
     for (int i=0;i<265;i++) {
@@ -444,7 +444,7 @@ void stepperMove(byte out) {
       delayMicroseconds(1000);
       digitalWrite(stp,HIGH);
       delayMicroseconds(1000);
-      if (--dStep == 0){break;}    
+      dStep--;    
     }
     digitalWrite(slp,LOW);     
   } else {
@@ -566,6 +566,8 @@ void loop() {
   // Map the pulse count to an angle in rad
   theta_L = d_map(count_L, 0, 8192, -2*PI, 2*PI);  
   theta_R = d_map(count_R, 0, 8192, -2*PI, 2*PI);
+  F_theta_L = theta_L;
+  F_theta_R = theta_R;
   
   // Read Position
   pos(EE,theta_L,theta_R,dTable[dStep]);
@@ -652,7 +654,7 @@ void serialEvent() {
     }
     // IF force is greater than zero, write a force
 //    if ((inData[0].floatingPoint > 1.0) && (inData[1].floatingPoint > 1.0)) {
-      force(inData[0].floatingPoint, inData[1].floatingPoint, theta_L, theta_R, dTable[dStep]);
+      force(inData[0].floatingPoint, inData[1].floatingPoint, F_theta_L, F_theta_R, dTable[dStep]);
 //    }    
     Serial.write(outBytes, 16);
 

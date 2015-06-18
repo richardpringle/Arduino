@@ -12,6 +12,7 @@ union binaryFloat outData[4];
 
 byte inBytes[9];
 byte outBytes[16];
+boolean outFull = false, inFull = false;
 
 //binaryFloat data0, data1, data2, data3;
 
@@ -366,6 +367,7 @@ byte speedByte2(int x) {
 // END Driver
 
 
+int motor1 = 0, motor2 = 0;
 // START Force
 void force(double Fx, double Fy, double angleL, double angleR, double d) {
   double x,y;
@@ -416,9 +418,9 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
   if (TR > 3000) {TR = 3000;}
   if ((TL + TR) > 3800) {TL = 1900;TR=1900;}
   
-  compact1(direcL,speedByte1(TL),speedByte2(TL));     // Driver1 is the bottom (angleL)as
+//  compact1(direcL,speedByte1(TL),speedByte2(TL));     // Driver1 is the bottom (angleL)as
   compact2(direcR,speedByte1(TR),speedByte2(TR));     // Driver2 is the top (angleR)
-  
+
 }
 // END Force
 
@@ -457,7 +459,7 @@ void stepperMove(byte out) {
 // Allows the first loop to run differently
 boolean first_loop = true;
 // Iterators:
-int i,j,n;
+int io,jo,no, ii, ji, ni;
 
 
 // START Setup
@@ -619,46 +621,63 @@ void loop() {
   outData[1].floatingPoint = EE[1];
   outData[2].floatingPoint = V[0];
   outData[3].floatingPoint = V[1];
-  i=0;
-  j=0;
-  while (i<16) {
-    n = 0;
-    while (n<4) {
-      outBytes[i] = outData[j].binary[n];
-      ++i;
-      ++n;      
+  io=0;
+  jo=0;
+  outFull = false;
+  while (io<16) {
+    no = 0;
+    while (no<4) {
+      outBytes[io] = outData[jo].binary[no];
+      ++io;
+      ++no;      
     }
-    ++j;
+    ++jo;
   }
+  outFull = true;
    
   first_loop = false;
   
 }
 
 void serialEvent() {
-  if ( Serial.available() ) {
+  inFull = false;
+  if ( Serial.available() == 9) {
+    
+//    Serial.println(Serial.readBytes(inBytes, 9));
     Serial.readBytes(inBytes, 9);
-    i=1;
-    j=0;
-    while (i<9) {
-      n = 0;
-      while (n<4) {
-        inData[j].binary[n] = inBytes[i];
-        ++i;
-        ++n;      
+    ii=1;
+    ji=0;
+    while (ii<9) {
+      ni = 0;
+      while (ni<4) {
+        inData[ji].binary[ni] = inBytes[ii];
+        ++ii;
+        ++ni;     
       }
-      ++j;
+      ++ji;
     }
-    if (inBytes[0]) {
-      stepperMove(inBytes[0]);
+    inFull = true; 
+    
+    if ((inBytes[0] == 0x0A) || (inBytes[0] == 0x0B)) {
+//      stepperMove(inBytes[0]);
+      stepperMove(0x00);
     }
-    // IF force is greater than zero, write a force
-//    if ((inData[0].floatingPoint > 1.0) && (inData[1].floatingPoint > 1.0)) {
-      force(inData[0].floatingPoint, inData[1].floatingPoint, F_theta_L, F_theta_R, dTable[dStep]);
-//    }    
-    Serial.write(outBytes, 16);
-
+//      force(0, 0, F_theta_L, F_theta_R, dTable[dStep]);
+    force(inData[0].floatingPoint, inData[1].floatingPoint, F_theta_L, F_theta_R, dTable[dStep]);
+    
+//    Serial.write(outBytes, 16);
   }
+//  Serial.println(outFull);
+//  Serial.println(inFull);
+  if (outFull && inFull) {
+    Serial.write(outBytes, 16);
+    Serial.flush();
+//    for (int i=0;i<4;i++) { 
+//      Serial.print(outData[i].floatingPoint);
+//      Serial.print(" ");
+//    }
+//    Serial.println();
+  } 
 }
 
 

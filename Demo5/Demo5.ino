@@ -10,8 +10,13 @@ union binaryFloat
 union binaryFloat inData[2];
 union binaryFloat outData[4];
 
+int motorTorque[2];
+int count = 0;
+
 byte inBytes[9];
 byte outBytes[16];
+byte motor1Bytes[3];
+byte motor2Bytes[3];
 boolean outFull = false, inFull = false;
 
 //binaryFloat data0, data1, data2, data3;
@@ -337,6 +342,7 @@ void compact1(byte a, byte b) {
 }
 
 void compact1(byte a, byte b, byte c) {
+  Serial1.flush();
   Serial1.write(a);
   Serial1.write(b);
   Serial1.write(c);
@@ -352,6 +358,7 @@ void compact2(byte a, byte b) {
 }
 
 void compact2(byte a, byte b, byte c) {
+  Serial2.flush();
   Serial2.write(a);
   Serial2.write(b);
   Serial2.write(c);
@@ -369,9 +376,9 @@ byte speedByte2(int x) {
 
 int motor1 = 0, motor2 = 0;
 // START Force
-void force(double Fx, double Fy, double angleL, double angleR, double d) {
+void force(float Fx, float Fy, float angleL, float angleR, float d) {
   double x,y;
-  double TL,TR;
+  int TL,TR;
   byte direcL, direcR;
   
   x = EE[0];
@@ -397,29 +404,54 @@ void force(double Fx, double Fy, double angleL, double angleR, double d) {
   TR = floor(j21*Fx + j22*Fy);
   
   if (TL < 0) {
-    direcL = motor_forward;
+//    direcL = motor_forward;
+    motor1Bytes[0] = motor_forward;
+//    motor1Bytes[0] = quick_forward;
   } else {
-    direcL = motor_reverse;
+//    direcL = motor_reverse;
+    motor1Bytes[0] = motor_reverse;
+//    motor1Bytes[0] = quick_reverse;    
   }
   
   if (TR < 0) {
-    direcR = motor_forward;
+//    direcR = motor_forward;
+    motor2Bytes[0] = motor_forward;
+//    motor2Bytes[0] = quick_forward;    
   } else {
-    direcR = motor_reverse;
+//    direcR = motor_reverse;
+    motor2Bytes[0] = motor_reverse;
+//    motor2Bytes[0] = quick_reverse;    
   }
   
   ////////////////////////!!!!!!!!!!!!!!!!!!!!!!
 /* do the absolute value */  
-  TL = fabs(TL);
-  TR = fabs(TR);
+  motorTorque[0] = abs(TL);
+  motorTorque[1] = abs(TR);
   
   // Until I get a better power supply
-  if (TL > 3000) {TL = 3000;}
-  if (TR > 3000) {TR = 3000;}
-  if ((TL + TR) > 3800) {TL = 1900;TR=1900;}
+//  if ((motorTorque[0].integer + motorTorque[2].integer) > 3800) {
+//    motorTorque[0] = 1900;
+//    motorTorque[1] = 1900;
+//  } else {
+//  }
+//  if ((TL + TR) > 3800) {TL = 1900;TR=1900;}
+    if (motorTorque[0] > 1900) {motorTorque[0] = 1900;}
+    if (motorTorque[1] > 1900) {motorTorque[1] = 1900;}
+    
+//    motorTorque[0] = map(motorTorque[0], 0, 1900, 0, 255);
+//    motorTorque[1] = map(motorTorque[1], 0, 1900, 0, 255);
+//    motor1Bytes[1] = motorTorque[0];
+//    motor2Bytes[1] = motorTorque[1];
+    motor1Bytes[1] = motorTorque[0] & 0x1F;
+    motor1Bytes[2] = motorTorque[0] >> 5;
+    motor2Bytes[1] = motorTorque[1] & 0x1F;
+    motor2Bytes[2] = motorTorque[1] >> 5;
+    
+    Serial1.write(motor1Bytes, 3);
+    Serial2.write(motor2Bytes, 3);
   
 //  compact1(direcL,speedByte1(TL),speedByte2(TL));     // Driver1 is the bottom (angleL)as
-  compact2(direcR,speedByte1(TR),speedByte2(TR));     // Driver2 is the top (angleR)
+//  compact2(direcR,speedByte1(TR),speedByte2(TR));     // Driver2 is the top (angleR)
 
 }
 // END Force
@@ -514,10 +546,16 @@ void setup() {
   
   
   // START Driver
-  Serial1.begin(115200);  
+//  Serial1.begin(115200);  
+//  compact1(exit_safe_start);
+//  delay(1000);
+//  Serial2.begin(115200);  
+//  compact2(exit_safe_start);
+//  delay(1000);
+  Serial1.begin(230400);  
   compact1(exit_safe_start);
   delay(1000);
-  Serial2.begin(115200);  
+  Serial2.begin(230400);  
   compact2(exit_safe_start);
   delay(1000);
   // END Driver
@@ -619,8 +657,10 @@ void loop() {
   // Buffer EE state [x,y,xdot,ydot]
   outData[0].floatingPoint = EE[0];
   outData[1].floatingPoint = EE[1];
-  outData[2].floatingPoint = V[0];
-  outData[3].floatingPoint = V[1];
+//  outData[2].floatingPoint = V[0];
+//  outData[3].floatingPoint = V[1];
+//  outData[2].floatingPoint = inData[0].floatingPoint;
+//  outData[3].floatingPoint = inData[1].floatingPoint;
   io=0;
   jo=0;
   outFull = false;
@@ -656,27 +696,21 @@ void serialEvent() {
       }
       ++ji;
     }
-    inFull = true; 
+    inFull = true;
+   
+   outData[2].floatingPoint = count_R;
+   outData[3].floatingPoint = count_L; 
     
     if ((inBytes[0] == 0x0A) || (inBytes[0] == 0x0B)) {
 //      stepperMove(inBytes[0]);
       stepperMove(0x00);
-    }
+    }    
 //      force(0, 0, F_theta_L, F_theta_R, dTable[dStep]);
-    force(inData[0].floatingPoint, inData[1].floatingPoint, F_theta_L, F_theta_R, dTable[dStep]);
-    
-//    Serial.write(outBytes, 16);
+    force(inData[0].floatingPoint, inData[1].floatingPoint, F_theta_L, F_theta_R, dTable[dStep]); 
   }
-//  Serial.println(outFull);
-//  Serial.println(inFull);
+
   if (outFull && inFull) {
     Serial.write(outBytes, 16);
-    Serial.flush();
-//    for (int i=0;i<4;i++) { 
-//      Serial.print(outData[i].floatingPoint);
-//      Serial.print(" ");
-//    }
-//    Serial.println();
   } 
 }
 

@@ -1,6 +1,8 @@
 #include <SPI.h>
 #include <math.h>
 
+unsigned int resp;
+
 union binaryFloat 
 {
  float floatingPoint;
@@ -230,11 +232,12 @@ void initEncoder(int counter) {
   // Set to 0x1200 for 45deg initialization
   // Set to 0x1000 for 0 ded initialization
   SPI.transfer(counter,0x10,SPI_CONTINUE);
-  SPI.transfer(counter,0x00,SPI_LAST);
+  resp = SPI.transfer(counter,0x00,SPI_LAST);
   // Set counting mode to positive index, reset to DTR (see above)on INDEX, and 4x count
   SPI.transfer(counter,WR+MDR0,SPI_CONTINUE);
   SPI.transfer(counter,free_run_mode+quad_x4,SPI_LAST);
  
+  Serial.println(resp);
   Serial.println("Encoder Initialized...");
   delay(10);
 
@@ -249,6 +252,9 @@ long readEncoder(int counter) {
   response1 = SPI.transfer(counter,0x00,SPI_CONTINUE);
   response2 = SPI.transfer(counter,0x00,SPI_LAST);
   response = (response1 << 8) + response2;
+  
+//  Serial.println(response1);
+//  Serial.println(response2);
   
   return response;  
 }
@@ -459,28 +465,28 @@ void force(float Fx, float Fy, float angleL, float angleR, float d) {
 
 // START Step
 void stepperMove(byte out) {
-  if ((out == 0x0A) && (dStep < 795)) {
+  if ((out == 0x0A) && (dStep < 900)) {
     digitalWrite(slp,HIGH);
     digitalWrite(dir,HIGH);
-    for (int i=0;i<265;i++) {
+    for (int i=0;i<300 ;i++) {
       digitalWrite(stp,LOW);
       delayMicroseconds(1000);
       digitalWrite(stp,HIGH);
       delayMicroseconds(1000);
       dStep++;      
     }
-    digitalWrite(slp,LOW);    
-  } else if ((out == 0x0B) && (dStep > 0)) {
+    digitalWrite(slp,LOW);
+  } else if ((out == 0x0B) && (dStep>10)) { 
     digitalWrite(slp,HIGH);
     digitalWrite(dir,LOW);
-    for (int i=0;i<265;i++) {
+    for (int i=0;dStep>0 ;i++) {
       digitalWrite(stp,LOW);
       delayMicroseconds(1000);
       digitalWrite(stp,HIGH);
       delayMicroseconds(1000);
-      dStep--;    
+      dStep--;      
     }
-    digitalWrite(slp,LOW);     
+    digitalWrite(slp,LOW);
   } else {
     digitalWrite(slp,LOW);
   }
@@ -677,6 +683,16 @@ void loop() {
    
   first_loop = false;
   
+  if (EE[0] < -75) {
+    stepperMove(0x0A);
+  }
+  
+  if (EE[0] > 75) {
+    stepperMove(0x0B);
+  }
+  
+//  Serial.println(EE[0]);
+  
 }
 
 void serialEvent() {
@@ -701,17 +717,18 @@ void serialEvent() {
    outData[2].floatingPoint = count_R;
    outData[3].floatingPoint = count_L; 
     
-    if ((inBytes[0] == 0x0A) || (inBytes[0] == 0x0B)) {
+//    if ((inBytes[0] == 0x0A) || (inBytes[0] == 0x0B)) {
 //      stepperMove(inBytes[0]);
-      stepperMove(0x00);
-    }    
+////      stepperMove(0x00);
+//    }    
 //      force(0, 0, F_theta_L, F_theta_R, dTable[dStep]);
     force(inData[0].floatingPoint, inData[1].floatingPoint, F_theta_L, F_theta_R, dTable[dStep]); 
   }
 
   if (outFull && inFull) {
     Serial.write(outBytes, 16);
-  } 
+  }
+    
 }
 
 
